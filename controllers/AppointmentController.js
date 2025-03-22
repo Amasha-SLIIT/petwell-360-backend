@@ -91,7 +91,7 @@ const getAvailableSlots = async (req, res) => {
     const todayStart = moment.utc().startOf("day");
     const xDaysFromToday = moment.utc().add(14, "days").endOf("day");
 
-    const intervalMinutes = 15; // 15 mins
+    const intervalMinutes = 30; // 30 mins
     const intervals = [];
     let currentTime = todayStart.clone();
 
@@ -101,9 +101,8 @@ const getAvailableSlots = async (req, res) => {
       currentTime.isSame(xDaysFromToday)
     ) {
       const hour = currentTime.hour();
-      // Check if the current time is within working hours (8 AM - 5 PM)
-      if (hour >= 8 && hour < 23) {
-        //  8 - 17
+      // Check if the current time is within working hours (9 AM - 9 PM)
+      if (hour >= 9 && hour < 21) {
         const from = currentTime.format();
 
         if (pairCount > 0) {
