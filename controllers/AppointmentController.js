@@ -24,7 +24,8 @@ const getAppointments = async (req, res) => {
 const getAppointmentById = async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.id).populate(
-      "userId"
+      "userId",
+      "petId"
     );
     if (!appointment)
       return res.status(404).json({ message: "Appointment not found" });
@@ -44,9 +45,10 @@ const getAppointmentById = async (req, res) => {
 
 const createAppointment = async (req, res) => {
   try {
-    const { pets, userId, appointmentFrom, appointmentTo } = req.body;
+    const { petId, services, userId, appointmentFrom, appointmentTo } = req.body;
     const newAppointment = new Appointment({
-      pets,
+      petId,
+      services,
       userId,
       appointmentFrom: moment
         .tz(appointmentFrom, timezone)
