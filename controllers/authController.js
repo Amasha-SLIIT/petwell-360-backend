@@ -69,7 +69,7 @@ exports.loginUser = async (req, res) => {
         }
 
         // Generate JWT Token
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "0.2h" });
 
         return res.json({ token, user: { id: user._id, email: user.email } });
 
@@ -84,8 +84,6 @@ exports.loginUser = async (req, res) => {
 exports.getUserInfo = async (req, res) => {
     try {
         // Fetch the user from the database using the user ID from the decoded token
-        
-        
         const user = await PetOwner.findById(req.user.id);  // req.user.id contains the user ID from the JWT
         console.log("req.user.id : ", req.user.id);
         console.log("Fetched User:", user);

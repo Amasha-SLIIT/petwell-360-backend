@@ -6,20 +6,22 @@ const PetOwner = require("../models/petOwnerModel");   //import the actual one a
 
 const getAllReviews = async (req, res) => {
     try {
-        const reviews = await Review.find().populate("ownerID", "firstName lastName");
+        const reviews = await Review.find().sort({ createdAt: -1 }).populate("ownerID", "firstName lastName");
+
 
         if (!reviews.length) {
             return res.status(404).json({ message: "No reviews found" });
         }
 
-    
         const formattedReviews = reviews.map((r) => ({
             _id: r._id,
             description: r.description,
             rating: r.rating,
             createdAt: r.createdAt,
             ownerName: r.ownerID ? `${r.ownerID.firstName} ${r.ownerID.lastName}` : "Anonymous",
+            ownerID: r.ownerID?._id || null // Include owner ID for permission checks
         }));
+        
 
         res.status(200).json(formattedReviews);
     } catch (error) {
@@ -59,24 +61,42 @@ const addReview = async (req, res) => {
 
 
 const updateReview = async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params; // Move this FIRST
     const { description, rating } = req.body;
+
     try {
-        const updatedReview = await Review.findByIdAndUpdate(id, { description, rating }, { new: true });
-        if (!updatedReview) return res.status(404).json({ message: "Review not found" });
+        const review = await Review.findById(id);
+        if (!review) return res.status(404).json({ message: "Review not found" });
+        
+        // Check ownership
+        if (String(review.ownerID) !== String(req.user.id)) {
+            return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        const updatedReview = await Review.findByIdAndUpdate(
+            id, 
+            { description, rating, updatedAt: new Date() }, 
+            { new: true }
+        );
         res.status(200).json(updatedReview);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
 
-
-
 const deleteReview = async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params; // Move this FIRST
+    
     try {
-        const deletedReview = await Review.findByIdAndDelete(id);
-        if (!deletedReview) return res.status(404).json({ message: "Review not found" });
+        const review = await Review.findById(id);
+        if (!review) return res.status(404).json({ message: "Review not found" });
+
+        // Check ownership
+        if (String(review.ownerID) !== String(req.user.id)) {
+            return res.status(403).json({ message: "Unauthorized" });
+        }
+
+        await Review.findByIdAndDelete(id);
         res.status(200).json({ message: "Review deleted successfully" });
     } catch (error) {
         res.status(500).json({ message: error.message });
