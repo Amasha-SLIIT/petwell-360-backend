@@ -100,9 +100,12 @@ const getAvailableSlots = async (req, res) => {
       currentTime.isBefore(xDaysFromToday) ||
       currentTime.isSame(xDaysFromToday)
     ) {
-      const hour = currentTime.hour();
-      // Check if the current time is within working hours (9 AM - 9 PM)
-      if (hour >= 9 && hour < 21) {
+      const sriLankanTime = currentTime.tz(timezone);
+      const hour = sriLankanTime.hour();
+      const minute = sriLankanTime.minute();
+      
+      // Check if the current time is within working hours (9 AM - 9 PM) in Sri Lankan time
+      if (hour >= 9 && hour <= 20) {
         const from = currentTime.format();
 
         if (pairCount > 0) {
@@ -111,6 +114,15 @@ const getAvailableSlots = async (req, res) => {
 
         intervals.push({ from: from, to: null, availability: true });
 
+        currentTime.add(intervalMinutes, "minutes");
+        pairCount += 1;
+      } else if (hour === 20 && minute === 30) {
+        // Special case for 8:30 PM slot
+        const from = currentTime.format();
+        if (pairCount > 0) {
+          intervals[pairCount - 1].to = from;
+        }
+        intervals.push({ from: from, to: null, availability: true });
         currentTime.add(intervalMinutes, "minutes");
         pairCount += 1;
       } else {
@@ -156,8 +168,55 @@ const getAvailableSlots = async (req, res) => {
         isAvailable: item.availability,
       }))
       .filter((item) =>
-        moment.tz(item.from, "UTC").isSameOrAfter(moment.utc())
+        moment.tz(item.from, timezone).isSameOrAfter(moment.tz(timezone))
       );
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const updateAppointment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { petId, services, userId, appointmentFrom, appointmentTo } = req.body;
+
+    const appointment = await Appointment.findById(id);
+    if (!appointment) {
+      return res.status(404).json({ message: "Appointment not found" });
+    }
+
+    // Update appointment fields
+    appointment.petId = petId || appointment.petId;
+    appointment.services = services || appointment.services;
+    appointment.userId = userId || appointment.userId;
+    
+    if (appointmentFrom) {
+      appointment.appointmentFrom = moment
+        .tz(appointmentFrom, timezone)
+        .utc()
+        .seconds(0)
+        .format();
+    }
+    
+    if (appointmentTo) {
+      appointment.appointmentTo = moment
+        .tz(appointmentTo, timezone)
+        .utc()
+        .seconds(0)
+        .format();
+    }
+
+    await appointment.save();
+
+    const result = {
+      ...appointment._doc,
+      appointmentFrom: moment(appointment.appointmentFrom)
+        .tz(timezone)
+        .format(),
+      appointmentTo: moment(appointment.appointmentTo).tz(timezone).format(),
+    };
 
     res.status(200).json(result);
   } catch (error) {
@@ -171,4 +230,5 @@ module.exports = {
   createAppointment,
   deleteAppointment,
   getAvailableSlots,
+  updateAppointment,
 };
