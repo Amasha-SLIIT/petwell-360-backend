@@ -5,7 +5,7 @@ const PetOwner = require("../models/petOwnerModel");
 //register user 
 exports.registerUser = async (req, res) => {
     try {
-        const { firstName, lastName, email, password, address, phoneNumber } = req.body;
+        const { firstName, lastName, email, password, address, phoneNumber, isAdmin  } = req.body;
 
         // Check if user already exists
         const existingUser = await PetOwner.findOne({ email });
@@ -21,6 +21,7 @@ exports.registerUser = async (req, res) => {
             password,
             address,
             phoneNumber,
+            isAdmin: isAdmin || false
            
         });
 
@@ -35,7 +36,8 @@ exports.registerUser = async (req, res) => {
                 email: newPetowner.email,
                 password:newPetowner.password,
                 address:newPetowner.address,
-                phoneNumber:newPetowner.phoneNumber
+                phoneNumber:newPetowner.phoneNumber,
+                isAdmin:newPetowner.isAdmin
             }
         });
     } catch (error) {
@@ -69,9 +71,9 @@ exports.loginUser = async (req, res) => {
         }
 
         // Generate JWT Token
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "0.2h" });
+        const token = jwt.sign({ id: user._id, isAdmin: user.isAdmin }, process.env.JWT_SECRET, { expiresIn: "0.2h" });
 
-        return res.json({ token, user: { id: user._id, email: user.email } });
+        return res.json({ token, user: { id: user._id, email: user.email, isAdmin: user.isAdmin } });
 
     } catch (error) {
         console.error(" Login error:", error);
@@ -102,6 +104,7 @@ exports.getUserInfo = async (req, res) => {
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
+            isAdmin: user.isAdmin,
             // You can add any other fields you want to include
         });
 

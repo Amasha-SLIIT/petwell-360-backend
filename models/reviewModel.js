@@ -26,7 +26,12 @@ const reviewSchema = new Schema({
     },
     updatedAt: { 
         type: Date 
-    }
+    },
+    reply: {
+        type: String,
+        default: null
+      },
+      
 });
 
 

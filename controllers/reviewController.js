@@ -6,7 +6,7 @@ const PetOwner = require("../models/petOwnerModel");   //import the actual one a
 
 const getAllReviews = async (req, res) => {
     try {
-        const reviews = await Review.find().sort({ createdAt: -1 }).populate("ownerID", "firstName lastName");
+        const reviews = await Review.find().populate("ownerID", "firstName lastName");
 
 
         if (!reviews.length) {
@@ -19,7 +19,8 @@ const getAllReviews = async (req, res) => {
             rating: r.rating,
             createdAt: r.createdAt,
             ownerName: r.ownerID ? `${r.ownerID.firstName} ${r.ownerID.lastName}` : "Anonymous",
-            ownerID: r.ownerID?._id || null // Include owner ID for permission checks
+            ownerID: r.ownerID?._id || null, // Include owner ID for permission checks
+            reply: r.reply || null
         }));
         
 
@@ -103,4 +104,32 @@ const deleteReview = async (req, res) => {
     }
 };
 
-module.exports = { getAllReviews, addReview, updateReview, deleteReview };
+const replyToReview = async (req, res) => {
+
+    const { id } = req.params;
+    const { reply } = req.body;
+  
+    try {
+      // Check if user is admin
+      if (!req.user.isAdmin) {
+        return res.status(403).json({ message: "Only admins can reply to reviews." });
+      }
+  
+      const review = await Review.findById(id);
+      if (!review) {
+        return res.status(404).json({ message: "Review not found" });
+      }
+  
+      review.reply = reply;
+      //review.updatedAt = new Date();
+      await review.save();
+  
+      res.status(200).json({ message: "Reply added successfully", review });
+    } catch (error) {
+      res.status(500).json({ message: "Server error", error: error.message });
+    }
+  };
+  
+  
+
+module.exports = { getAllReviews, addReview, updateReview, deleteReview, replyToReview };
