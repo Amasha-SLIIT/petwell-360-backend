@@ -3,7 +3,14 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const connectDB = require("./db.js");
+
+//nilekas routes
 const inventoryRoutes = require("./routes/inventoryRoutes");
+//amasha routes
+const appointmentRoutes = require("./routes/appointmentRoutes");
+const userRoutes = require("./routes/userRoutes");
+const petRoutes = require("./routes/petRoutes");
+
 
 
 
@@ -21,7 +28,13 @@ connectDB();
 app.use(cors());
 app.use(express.json());
 
-// Use the inventory routes
+//amasha
+app.use("/api/users", userRoutes);
+app.use("/api/appointments", appointmentRoutes);
+app.use("/api/pets", petRoutes);
+
+
+// nilekas inventory routes
 app.use("/inventory", inventoryRoutes);
 app.use('/uploads', express.static('uploads'));
 
