@@ -24,6 +24,32 @@ const appointmentSchema = new mongoose.Schema({
     type: Date,
     required: true,
   },
+  status: {
+    type: String,
+    enum: ["pending", "confirmed", "cancelled", "completed"],
+    default: "pending",
+  },
+  payment: {
+    amount: {
+      type: Number,
+      default: 500,
+    },
+    status: {
+      type: String,
+      enum: ["pending", "paid", "refunded"],
+      default: "pending",
+    },
+    paymentId: {
+      type: String,
+    },
+    paymentDate: {
+      type: Date,
+    },
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
 const Appointment = mongoose.model("Appointment", appointmentSchema);
