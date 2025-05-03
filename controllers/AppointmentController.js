@@ -231,53 +231,167 @@ const updateAppointment = async (req, res) => {
 
 const generateReport = async (req, res) => {
   try {
-    // Get all appointments
-    const appointments = await Appointment.find();
+    console.log('Starting report generation...');
     
-    // Calculate statistics
-    const serviceStats = {};
-    const timeSlotStats = {};
-    const twoWeekPeriods = [];
-    const currentDate = moment().tz(timezone);
-    
-    // Initialize two-week periods for the last 6 months
-    for (let i = 0; i < 12; i++) {
-      const startDate = currentDate.clone().subtract(i * 14, 'days');
-      const endDate = startDate.clone().add(13, 'days');
-      twoWeekPeriods.push({
-        start: startDate,
-        end: endDate,
-        count: 0
+    // Get all appointments with populated user and pet data
+    const appointments = await Appointment.find()
+      .populate('userId', 'name')  // Only populate necessary fields
+      .populate('petId', 'name type')
+      .catch(err => {
+        console.error('Error fetching appointments:', err);
+        throw new Error('Failed to fetch appointment data from database');
+      });
+
+    if (!appointments || appointments.length === 0) {
+      console.log('No appointments found in the database');
+      return res.status(404).json({ 
+        message: 'No appointment data found to generate report',
+        error: 'NO_DATA'
       });
     }
 
-    appointments.forEach(appointment => {
-      // Service type statistics
-      appointment.services.forEach(service => {
-        serviceStats[service] = (serviceStats[service] || 0) + 1;
-      });
+    console.log(`Found ${appointments.length} appointments for report generation`);
 
-      // Time slot statistics
-      const appointmentTime = moment(appointment.appointmentFrom).tz(timezone);
-      const hour = appointmentTime.hour();
-      const timeSlot = `${hour}:00 - ${hour + 1}:00`;
-      timeSlotStats[timeSlot] = (timeSlotStats[timeSlot] || 0) + 1;
-
-      // Two-week period statistics
-      const appointmentDate = moment(appointment.appointmentFrom).tz(timezone);
-      twoWeekPeriods.forEach(period => {
-        if (appointmentDate.isBetween(period.start, period.end, 'day', '[]')) {
-          period.count++;
+    // Initialize statistics objects
+    const stats = {
+      appointmentVolume: {
+        daily: {},
+        weekly: {},
+        monthly: {},
+        serviceType: {},
+        perPet: {},
+        singleVsMultiPet: {
+          single: 0,
+          multi: 0,
+          total: 0
         }
-      });
+      },
+      scheduling: {
+        peakHours: {},
+        weekdayVsWeekend: {
+          weekday: 0,
+          weekend: 0
+        },
+        slotUtilization: {
+          weekday: { total: 0, booked: 0 },
+          weekend: { total: 0, booked: 0 }
+        },
+        popularDays: {},
+        cancellationRate: {
+          total: 0,
+          cancelled: 0,
+          byService: {}
+        }
+      },
+      serviceInsights: {
+        mostRequested: {},
+        totalByService: {}
+      },
+      clientBehavior: {
+        loyalty: {}
+      }
+    };
+
+    // Process each appointment
+    appointments.forEach(appointment => {
+      try {
+        const appointmentDate = moment(appointment.appointmentFrom).tz(timezone);
+        const dayOfWeek = appointmentDate.day();
+        const hour = appointmentDate.hour();
+        const dateKey = appointmentDate.format('YYYY-MM-DD');
+        const weekKey = appointmentDate.format('YYYY-[W]WW');
+        const monthKey = appointmentDate.format('YYYY-MM');
+
+        // Appointment Volume Analysis
+        stats.appointmentVolume.daily[dateKey] = (stats.appointmentVolume.daily[dateKey] || 0) + 1;
+        stats.appointmentVolume.weekly[weekKey] = (stats.appointmentVolume.weekly[weekKey] || 0) + 1;
+        stats.appointmentVolume.monthly[monthKey] = (stats.appointmentVolume.monthly[monthKey] || 0) + 1;
+
+        // Service Type Analysis
+        appointment.services.forEach(service => {
+          stats.appointmentVolume.serviceType[service] = (stats.appointmentVolume.serviceType[service] || 0) + 1;
+          stats.serviceInsights.totalByService[service] = (stats.serviceInsights.totalByService[service] || 0) + 1;
+        });
+
+        // Per Pet Analysis
+        const petId = appointment.petId._id.toString();
+        stats.appointmentVolume.perPet[petId] = (stats.appointmentVolume.perPet[petId] || 0) + 1;
+
+        // Single vs Multi Pet Analysis
+        const userId = appointment.userId._id.toString();
+        if (!stats.appointmentVolume.singleVsMultiPet[userId]) {
+          const userPets = appointments.filter(a => a.userId._id.toString() === userId)
+            .map(a => a.petId._id.toString());
+          const uniquePets = new Set(userPets).size;
+          if (uniquePets > 1) {
+            stats.appointmentVolume.singleVsMultiPet.multi++;
+          } else {
+            stats.appointmentVolume.singleVsMultiPet.single++;
+          }
+          stats.appointmentVolume.singleVsMultiPet.total++;
+          stats.appointmentVolume.singleVsMultiPet[userId] = true;
+        }
+
+        // Time Slot Analysis
+        const timeSlot = `${hour}:00 - ${hour + 1}:00`;
+        stats.scheduling.peakHours[timeSlot] = (stats.scheduling.peakHours[timeSlot] || 0) + 1;
+
+        // Weekday vs Weekend Analysis
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          stats.scheduling.weekdayVsWeekend.weekend++;
+        } else {
+          stats.scheduling.weekdayVsWeekend.weekday++;
+        }
+
+        // Slot Utilization
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        if (isWeekend) {
+          stats.scheduling.slotUtilization.weekend.total++;
+          if (appointment.status === 'confirmed') {
+            stats.scheduling.slotUtilization.weekend.booked++;
+          }
+        } else {
+          stats.scheduling.slotUtilization.weekday.total++;
+          if (appointment.status === 'confirmed') {
+            stats.scheduling.slotUtilization.weekday.booked++;
+          }
+        }
+
+        // Popular Days
+        const dayName = appointmentDate.format('dddd');
+        stats.scheduling.popularDays[dayName] = (stats.scheduling.popularDays[dayName] || 0) + 1;
+
+        // Cancellation Rate
+        stats.scheduling.cancellationRate.total++;
+        if (appointment.status === 'cancelled') {
+          stats.scheduling.cancellationRate.cancelled++;
+          appointment.services.forEach(service => {
+            stats.scheduling.cancellationRate.byService[service] = (stats.scheduling.cancellationRate.byService[service] || 0) + 1;
+          });
+        }
+
+        // Client Loyalty
+        stats.clientBehavior.loyalty[userId] = (stats.clientBehavior.loyalty[userId] || 0) + 1;
+      } catch (err) {
+        console.error('Error processing appointment:', err);
+        // Continue processing other appointments
+      }
     });
 
-    // Calculate averages
+    // Calculate derived statistics
     const totalAppointments = appointments.length;
-    const averageAppointmentsPerTwoWeeks = totalAppointments / twoWeekPeriods.length;
-    
-    // Find busiest time slots
-    const busiestTimeSlots = Object.entries(timeSlotStats)
+    const cancellationRate = (stats.scheduling.cancellationRate.cancelled / totalAppointments) * 100;
+    const slotUtilizationWeekday = (stats.scheduling.slotUtilization.weekday.booked / stats.scheduling.slotUtilization.weekday.total) * 100;
+    const slotUtilizationWeekend = (stats.scheduling.slotUtilization.weekend.booked / stats.scheduling.slotUtilization.weekend.total) * 100;
+    const singlePetPercentage = (stats.appointmentVolume.singleVsMultiPet.single / stats.appointmentVolume.singleVsMultiPet.total) * 100;
+    const multiPetPercentage = (stats.appointmentVolume.singleVsMultiPet.multi / stats.appointmentVolume.singleVsMultiPet.total) * 100;
+
+    // Find most requested service
+    const mostRequestedService = Object.entries(stats.serviceInsights.totalByService)
+      .sort(([, a], [, b]) => b - a)[0];
+
+    // Find top clients by visits
+    const topClients = Object.entries(stats.clientBehavior.loyalty)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5);
 
@@ -286,14 +400,11 @@ const generateReport = async (req, res) => {
     const fileName = `appointment-report-${moment().format('YYYY-MM-DD')}.pdf`;
     const reportsDir = path.join(process.cwd(), 'reports');
     
-    // Ensure reports directory exists
     if (!fs.existsSync(reportsDir)) {
       fs.mkdirSync(reportsDir, { recursive: true });
     }
 
     const filePath = path.join(reportsDir, fileName);
-
-    // Write PDF to file
     const writeStream = fs.createWriteStream(filePath);
     doc.pipe(writeStream);
 
@@ -301,31 +412,90 @@ const generateReport = async (req, res) => {
     doc.fontSize(20).text('Appointment Statistics Report', { align: 'center' });
     doc.moveDown(2);
 
-    // Service Statistics
-    doc.fontSize(16).text('Service Type Statistics');
+    // 1. Appointment Volume & Demand Analysis
+    doc.fontSize(16).text('1. Appointment Volume & Demand Analysis');
     doc.moveDown();
-    Object.entries(serviceStats).forEach(([service, count]) => {
-      doc.fontSize(12).text(`${service}: ${count} appointments (${((count/totalAppointments)*100).toFixed(2)}%)`);
+
+    // Total Appointments
+    doc.fontSize(14).text('Total Appointments:');
+    doc.fontSize(12).text(`- Total: ${totalAppointments}`);
+    doc.fontSize(12).text(`- Daily Average: ${(totalAppointments / Object.keys(stats.appointmentVolume.daily).length).toFixed(2)}`);
+    doc.fontSize(12).text(`- Weekly Average: ${(totalAppointments / Object.keys(stats.appointmentVolume.weekly).length).toFixed(2)}`);
+    doc.fontSize(12).text(`- Monthly Average: ${(totalAppointments / Object.keys(stats.appointmentVolume.monthly).length).toFixed(2)}`);
+    doc.moveDown();
+
+    // Service Type Breakdown
+    doc.fontSize(14).text('Appointments by Service Type:');
+    Object.entries(stats.appointmentVolume.serviceType).forEach(([service, count]) => {
+      doc.fontSize(12).text(`- ${service}: ${count} (${((count/totalAppointments)*100).toFixed(2)}%)`);
+    });
+    doc.moveDown();
+
+    // Single vs Multi Pet Clients
+    doc.fontSize(14).text('Client Distribution:');
+    doc.fontSize(12).text(`- Single Pet Clients: ${singlePetPercentage.toFixed(2)}%`);
+    doc.fontSize(12).text(`- Multi Pet Clients: ${multiPetPercentage.toFixed(2)}%`);
+    doc.moveDown(2);
+
+    // 2. Time Slot & Scheduling Efficiency
+    doc.fontSize(16).text('2. Time Slot & Scheduling Efficiency');
+    doc.moveDown();
+
+    // Busiest Time Slots
+    doc.fontSize(14).text('Busiest Time Slots:');
+    const busiestTimeSlots = Object.entries(stats.scheduling.peakHours)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5);
+    busiestTimeSlots.forEach(([time, count]) => {
+      const percentage = ((count / totalAppointments) * 100).toFixed(2);
+      doc.fontSize(12).text(`- ${time}: ${count} appointments (${percentage}%)`);
+    });
+    doc.moveDown();
+
+    // Weekday vs Weekend
+    doc.fontSize(14).text('Weekday vs Weekend Demand:');
+    doc.fontSize(12).text(`- Weekday: ${stats.scheduling.weekdayVsWeekend.weekday} appointments`);
+    doc.fontSize(12).text(`- Weekend: ${stats.scheduling.weekdayVsWeekend.weekend} appointments`);
+    doc.moveDown();
+
+    // Slot Utilization
+    doc.fontSize(14).text('Slot Utilization Rate:');
+    doc.fontSize(12).text(`- Weekday: ${slotUtilizationWeekday.toFixed(2)}%`);
+    doc.fontSize(12).text(`- Weekend: ${slotUtilizationWeekend.toFixed(2)}%`);
+    doc.moveDown();
+
+    // Most Popular Days
+    doc.fontSize(14).text('Most Popular Days:');
+    const popularDays = Object.entries(stats.scheduling.popularDays)
+      .sort(([, a], [, b]) => b - a);
+    popularDays.forEach(([day, count]) => {
+      doc.fontSize(12).text(`- ${day}: ${count} appointments`);
+    });
+    doc.moveDown();
+
+    // Cancellation Rate
+    doc.fontSize(14).text('Cancellation Rate:');
+    doc.fontSize(12).text(`- Overall: ${cancellationRate.toFixed(2)}%`);
+    doc.fontSize(12).text('By Service Type:');
+    Object.entries(stats.scheduling.cancellationRate.byService).forEach(([service, count]) => {
+      const serviceTotal = stats.appointmentVolume.serviceType[service];
+      doc.fontSize(12).text(`  - ${service}: ${((count/serviceTotal)*100).toFixed(2)}%`);
     });
     doc.moveDown(2);
 
-    // Time Slot Statistics
-    doc.fontSize(16).text('Busiest Time Slots');
+    // 3. Service-Specific Insights
+    doc.fontSize(16).text('3. Service-Specific Insights');
     doc.moveDown();
-    busiestTimeSlots.forEach(([timeSlot, count]) => {
-      doc.fontSize(12).text(`${timeSlot}: ${count} appointments (${((count/totalAppointments)*100).toFixed(2)}%)`);
-    });
+    doc.fontSize(14).text('Most Requested Service:');
+    doc.fontSize(12).text(`- ${mostRequestedService[0]}: ${mostRequestedService[1]} appointments`);
     doc.moveDown(2);
 
-    // Two-Week Period Statistics
-    doc.fontSize(16).text('Two-Week Period Statistics');
+    // 4. Client Behavior
+    doc.fontSize(16).text('4. Client Behavior');
     doc.moveDown();
-    doc.fontSize(12).text(`Average appointments per two weeks: ${averageAppointmentsPerTwoWeeks.toFixed(2)}`);
-    doc.moveDown();
-    twoWeekPeriods.forEach((period, index) => {
-      doc.fontSize(12).text(
-        `Period ${index + 1} (${period.start.format('MMM D')} - ${period.end.format('MMM D')}): ${period.count} appointments`
-      );
+    doc.fontSize(14).text('Top Clients by Number of Visits:');
+    topClients.forEach(([userId, visits], index) => {
+      doc.fontSize(12).text(`${index + 1}. User ID: ${userId} - ${visits} visits`);
     });
 
     // Finalize PDF
@@ -333,7 +503,6 @@ const generateReport = async (req, res) => {
 
     // Wait for the write stream to finish
     writeStream.on('finish', () => {
-      // Send the file for download
       res.download(filePath, fileName, (err) => {
         if (err) {
           console.error('Error sending file:', err);
@@ -353,7 +522,12 @@ const generateReport = async (req, res) => {
 
   } catch (error) {
     console.error('Error in generateReport:', error);
-    res.status(500).json({ message: error.message });
+    // Send a more detailed error response
+    res.status(500).json({ 
+      message: error.message || 'Failed to generate report',
+      error: error.name || 'UNKNOWN_ERROR',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
