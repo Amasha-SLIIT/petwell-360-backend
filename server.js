@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const connectDB = require("./db.js");
-//const router = require("./routes/userRoute.js")
 const reviewRoutes = require("./routes/reviewRoute");
 const authRoutes = require("./routes/authRoutes");
 
@@ -19,6 +18,8 @@ connectDB();
 // Middleware
 app.use(cors());
 app.use(express.json());  
+
+//routes
 app.use("/reviews", reviewRoutes);
 app.use("/auth", authRoutes); 
 

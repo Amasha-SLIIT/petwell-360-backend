@@ -1,43 +1,48 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const PetOwner = require("../models/petOwnerModel");
+const User = require("../models/UserModel");
 
-//register user 
+const generateToken = (id) => {
+    return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+};
+
+// Register User 
 exports.registerUser = async (req, res) => {
     try {
-        const { firstName, lastName, email, password, address, phoneNumber, isAdmin  } = req.body;
+        const { firstName, lastName, email, password, address, phoneNumber, role } = req.body;
 
         // Check if user already exists
-        const existingUser = await PetOwner.findOne({ email });
+        const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ message: "User already exists with this email" });
         }
 
         // Create new user
-        const newPetowner = new PetOwner({
+        const newUser = new User({
             firstName,
             lastName,
             email,
             password,
             address,
             phoneNumber,
-            isAdmin: isAdmin || false
-           
+            role: role || 'petowner'
         });
 
-        await newPetowner.save();
-        
-        return res.status(201).json({ 
+        await newUser.save();
+
+        const token = generateToken(newUser._id);
+
+        return res.status(201).json({
+            token,
             message: "User registered successfully",
             user: {
-                id: newPetowner._id,
-                firstName: newPetowner.firstName,
-                lastName: newPetowner.lastName,
-                email: newPetowner.email,
-                password:newPetowner.password,
-                address:newPetowner.address,
-                phoneNumber:newPetowner.phoneNumber,
-                isAdmin:newPetowner.isAdmin
+                id: newUser._id,
+                firstName: newUser.firstName,
+                lastName: newUser.lastName,
+                email: newUser.email,
+                address: newUser.address,
+                phoneNumber: newUser.phoneNumber,
+                role: newUser.role
             }
         });
     } catch (error) {
@@ -47,33 +52,23 @@ exports.registerUser = async (req, res) => {
 };
 
 // Login User
-
 exports.loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Find user by email
-        const user = await PetOwner.findOne({ email });
+        const user = await User.findOne({ email });
         if (!user) {
             return res.status(400).json({ message: "Invalid email" });
         }
 
-        console.log(" User found in DB:", user);
-        console.log("Entered password:", password);
-        console.log(" Stored hashed password from DB:", user.password);
-
-        // Compare entered password with stored hashed password
         const isMatch = await bcrypt.compare(password, user.password);
-        console.log(" bcrypt.compare() result:", isMatch);
-
         if (!isMatch) {
             return res.status(400).json({ message: "Invalid password" });
         }
 
-        // Generate JWT Token
-        const token = jwt.sign({ id: user._id, isAdmin: user.isAdmin }, process.env.JWT_SECRET, { expiresIn: "0.2h" });
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "0.2h" });
 
-        return res.json({ token, user: { id: user._id, email: user.email, isAdmin: user.isAdmin } });
+        return res.json({ token, user: { id: user._id, email: user.email, role: user.role } });
 
     } catch (error) {
         console.error(" Login error:", error);
@@ -81,31 +76,23 @@ exports.loginUser = async (req, res) => {
     }
 };
 
-
-
+// Get User Info
 exports.getUserInfo = async (req, res) => {
     try {
-        // Fetch the user from the database using the user ID from the decoded token
-        const user = await PetOwner.findById(req.user.id);  // req.user.id contains the user ID from the JWT
-        console.log("req.user.id : ", req.user.id);
-        console.log("Fetched User:", user);
-
-        console.log("User ID Type:", typeof req.user.id);
-
-
+        const user = await User.findById(req.user.id);
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Return the user's information (excluding sensitive data)
         return res.json({
             id: user._id,
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
-            isAdmin: user.isAdmin,
-            // You can add any other fields you want to include
+            role: user.role,
+            phoneNumber: user.phoneNumber,
+            address: user.address,
         });
 
     } catch (error) {

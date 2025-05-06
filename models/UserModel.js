@@ -48,5 +48,5 @@ petOwnerSchema.pre("save", async function (next) {
 });
 
 
-const PetOwner = mongoose.model("PetOwner", petOwnerSchema);
-module.exports = PetOwner;
+const User = mongoose.model("PetOwner", petOwnerSchema);
+module.exports = User;

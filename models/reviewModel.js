@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const Schema = mongoose.Schema;
-const PetOwner = require("./petOwnerModel"); //import the actual one later
+const PetOwner = require("./UserModel"); //import the actual one later
 
 // Review Schema
 const reviewSchema = new Schema({

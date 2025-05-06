@@ -1,6 +1,6 @@
 
 const Review = require("../models/reviewModel");
-const PetOwner = require("../models/petOwnerModel");   //import the actual one after github pull
+const PetOwner = require("../models/UserModel");   
 
 
 
@@ -111,7 +111,7 @@ const replyToReview = async (req, res) => {
   
     try {
       // Check if user is admin
-      if (!req.user.isAdmin) {
+      if (req.user.role !== 'admin') {
         return res.status(403).json({ message: "Only admins can reply to reviews." });
       }
   
