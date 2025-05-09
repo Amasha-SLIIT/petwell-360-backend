@@ -20,14 +20,9 @@ const petOwnerSchema = new mongoose.Schema({
     phoneNumber: String,
     password: { 
         type: String, 
-        required: true
-    },
-    role: {
-        type: String,
-        enum: ['petowner', 'staff', 'admin'], // Allowed roles
-        default: 'petowner' // Default role
-    }
-      
+        required: true,
+        match: [/^\d{10}$/, "📞 Please enter a valid 10-digit phone number"],
+    }, 
 });
 
 petOwnerSchema.pre("save", async function (next) {
@@ -42,7 +37,7 @@ petOwnerSchema.pre("save", async function (next) {
     console.log("🔑 Password before hashing:", this.password);
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-    console.log("🛠️ Hashed password before saving:", this.password);
+    console.log("🛠 Hashed password before saving:", this.password);
 
     next();
 });
