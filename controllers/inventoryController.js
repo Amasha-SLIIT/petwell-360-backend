@@ -1,3 +1,4 @@
+
 const Inventory = require("../models/inventoryModel");
 const path = require("path");
 
@@ -161,5 +162,3 @@ exports.getInventoryUsageStats = async (req, res) => {
 
 
 //*********************************************** */
-
-

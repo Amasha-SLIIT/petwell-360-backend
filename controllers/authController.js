@@ -3,6 +3,10 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/UserModel");
 
 const generateToken = (id) => {
+    if (!process.env.JWT_SECRET) {
+        console.error("JWT_SECRET not set in environment!");
+        return "invalid_token"; // prevent full crash
+    }
     return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "1h" });
 };
 
@@ -66,7 +70,7 @@ exports.loginUser = async (req, res) => {
             return res.status(400).json({ message: "Invalid password" });
         }
 
-        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "0.2h" });
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
         return res.json({ token, user: { id: user._id, email: user.email, role: user.role } });
 

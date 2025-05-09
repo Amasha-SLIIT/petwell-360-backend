@@ -1,82 +1,65 @@
-const User = require("../models/userModel");
+const Appointment = require("../models/Appointment");
+const Pet = require("../models/Pet");
+const User = require("../models/User");
 
-const getAllUsers = async (req,res,next) => {
-    let users;
+const moment = require("moment");
+require("moment-timezone");
 
-    try{
-        users = await User.find();   
-    }catch(err){
-        return res.status(500).json({ message: "Internal Server Error", error: err.message });
+const timezone = "Asia/Colombo";
 
+const getUsers = async (req, res) => {
+    try {
+        const users = await User.find();
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-    //notfound
-    if(!users || users.length === 0){
-        return res.status(404).json({message:"User notfound"});
-
-    }
-    //display all users
-    return res.status(200).json({users})
 };
 
-//data insert function
-const addUsers = async (req, res, next) => {
-
-    const {name, gmail, age, address } = req.body;
-    let user;
-    try{
-        user = new User({name, gmail, age, address});
-        await user.save();
-    }catch(err){
-        return res.status(500).json({ message: "Internal Server Error", error: err.message });
+const getUserById = async (req, res) => {
+    try {
+        const user = await User.findById(req.params.id);
+        if (!user) return res.status(404).json({ message: "User not found" });
+        res.status(200).json(user);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-
-    //not insert users
-    if(!user){
-        return res.status(404).send({message:"unable to add user"});
-    }
-    return res.status(200).json({user});
-
 };
 
-//update user details
-const updateUser = async (req,res,next) => {
-    const id = req.params.id;
-    const {name,gmail,age,address} = req.body;
+const getPetsByUserId = async (req, res) => {
+    try {
+        const pets = await Pet.find({ userId: req.params.id });
 
-    let user;
-
-    try{
-        user = await User.findByIdAndUpdate(id, { name, gmail, age, address }, { new: true });
-    }catch(err){
-        return res.status(500).json({ message: "Internal Server Error", error: err.message });
+        res.status(200).json(pets);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-
-    if(!user){
-        return res.status(404).json({message:"unable to update user details"});
-    }
-    return res.status(200).json({user});
 };
 
-//delete data
-const deleteUser = async(req,res,next) => {
-    const id = req.params.id;
-    let user;
+const getAppointmentsByUserId = async (req, res) => {
+    try {
+        const appointment = await Appointment.find({ userId: req.params.id }).populate(
+            "petId"
+        );
+        if (!appointment)
+            return res.status(404).json({ message: "Appointment not found" });
 
-    try{
-        user = await User.findByIdAndDelete(id);
-    }catch(err){
-        return res.status(500).json({ message: "Internal Server Error", error: err.message });
+        const result = appointment.map((a) => ({
+            ...a._doc,
+            appointmentFrom: moment(a.appointmentFrom)
+                .tz(timezone)
+                .format(),
+            appointmentTo: moment(a.appointmentTo).tz(timezone).format(),
+        }))
+        res.status(200).json(result);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-    
-    if(!user){
-        return res.status(404).json({message:"unable to delete user details"});
-    }
-    return res.status(200).json({ message: "User deleted successfully" });
+};
 
-
-}
-// exporting for other files to access
-exports.getAllUsers = getAllUsers;
-exports.addUsers = addUsers;
-exports.updateUser = updateUser;
-exports.deleteUser = deleteUser;
+module.exports = {
+    getUsers,
+    getUserById,
+    getPetsByUserId,
+    getAppointmentsByUserId
+};
