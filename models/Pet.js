@@ -1,20 +1,28 @@
 const mongoose = require("mongoose");
 
 const petSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: true,
-    },
-    type: {
-        type: String,
-        enum: ["Dog", "Cat"],
-        required: true,
-    },
-    userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-    },
+  petName: {
+    type: String,
+    required: true,
+  },
+  species: {
+    type: String,
+    enum: ["Dog", "Cat", "Other"],
+    required: true,
+  },
+  age: {
+    type: Number,
+    required: true,
+  },
+  medicalHistory: {
+    type: String,
+    required: true,
+  },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "PetOwner", 
+    required: true,
+  },
 });
 
 const Pet = mongoose.model("Pet", petSchema);
